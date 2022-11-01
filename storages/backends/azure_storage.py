@@ -150,6 +150,9 @@ class AzureStorage(BaseStorage):
             "connection_string": setting('AZURE_CONNECTION_STRING'),
             "token_credential": setting('AZURE_TOKEN_CREDENTIAL'),
             "api_version": setting('AZURE_API_VERSION', None),
+            "tenant_id": setting('AZURE_TENANT_ID'),
+            "client_id": setting('AZURE_CLIENT_ID'),
+            "client_secret": setting('AZURE_CLIENT_SECRET'),
         }
 
     def _get_service_client(self, use_custom_domain):
@@ -172,6 +175,13 @@ class AzureStorage(BaseStorage):
             credential = self.sas_token
         elif self.token_credential:
             credential = self.token_credential
+        elif self.tenant_id:
+            from azure.identity import ClientSecretCredential
+            credential = ClientSecretCredential(
+                tenant_id=self.tenant_id,
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
         options = {}
         if self.api_version:
             options["api_version"] = self.api_version
