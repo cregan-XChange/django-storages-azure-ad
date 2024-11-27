@@ -20,7 +20,8 @@ from storages.utils import get_available_overwrite_name
 from storages.utils import safe_join
 from storages.utils import setting
 from storages.utils import to_bytes
-
+import logging
+logger = logging.getLogger(__name__)
 
 @deconstructible
 class AzureStorageFile(File):
@@ -185,6 +186,11 @@ class AzureStorage(BaseStorage):
         options = {}
         if self.api_version:
             options["api_version"] = self.api_version
+        logger.error(f"azure_container:  {self.azure_container}")
+        logger.error(f"azure_account_name: {self.account_name}")
+        logger.error(f"client_id: { self.client_id}")
+        logger.error(f"tenant_id: { self.tenant_id}")
+        logger.error(f"client_secret: { self.client_secret}")
         return BlobServiceClient(account_url, credential=credential, **options)
 
     @property
