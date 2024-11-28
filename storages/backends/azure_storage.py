@@ -191,6 +191,7 @@ class AzureStorage(BaseStorage):
         logger.error(f"client_id: { self.client_id}")
         logger.error(f"tenant_id: { self.tenant_id}")
         logger.error(f"client_secret: { self.client_secret}")
+        logger.error(f"Token: {credential.get_token()}")
         return BlobServiceClient(account_url, credential=credential, **options)
 
     @property
