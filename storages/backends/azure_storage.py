@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 from datetime import datetime
 from datetime import timedelta
@@ -20,8 +21,9 @@ from storages.utils import get_available_overwrite_name
 from storages.utils import safe_join
 from storages.utils import setting
 from storages.utils import to_bytes
-import logging
+
 logger = logging.getLogger(__name__)
+
 
 @deconstructible
 class AzureStorageFile(File):
@@ -41,13 +43,15 @@ class AzureStorageFile(File):
         file = SpooledTemporaryFile(
             max_size=self._storage.max_memory_size,
             suffix=".AzureStorageFile",
-            dir=setting("FILE_UPLOAD_TEMP_DIR", None))
+            dir=setting("FILE_UPLOAD_TEMP_DIR", None),
+        )
 
-        if 'r' in self._mode or 'a' in self._mode:
+        if "r" in self._mode or "a" in self._mode:
             download_stream = self._storage.client.download_blob(
-                self._path, timeout=self._storage.timeout)
+                self._path, timeout=self._storage.timeout
+            )
             download_stream.readinto(file)
-        if 'r' in self._mode:
+        if "r" in self._mode:
             file.seek(0)
 
         self._file = file
@@ -59,14 +63,12 @@ class AzureStorageFile(File):
     file = property(_get_file, _set_file)
 
     def read(self, *args, **kwargs):
-        if 'r' not in self._mode and 'a' not in self._mode:
+        if "r" not in self._mode and "a" not in self._mode:
             raise AttributeError("File was not opened in read mode.")
         return super().read(*args, **kwargs)
 
     def write(self, content):
-        if ('w' not in self._mode and
-                '+' not in self._mode and
-                'a' not in self._mode):
+        if "w" not in self._mode and "+" not in self._mode and "a" not in self._mode:
             raise AttributeError("File was not opened in write mode.")
         self._is_dirty = True
         return super().write(to_bytes(content))
@@ -100,18 +102,13 @@ def _get_valid_path(s):
     #   * can contain any character
     #   * must escape URL reserved characters
     #     (not needed here since the azure client will do that)
-    s = s.strip('./')
+    s = s.strip("./")
     if len(s) > _AZURE_NAME_MAX_LEN:
-        raise ValueError(
-            "File name max len is %d" % _AZURE_NAME_MAX_LEN)
+        raise ValueError("File name max len is %d" % _AZURE_NAME_MAX_LEN)
     if not len(s):
-        raise ValueError(
-            "File name must contain one or more "
-            "printable characters")
-    if s.count('/') > 256:
-        raise ValueError(
-            "File name must not contain "
-            "more than 256 slashes")
+        raise ValueError("File name must contain one or more " "printable characters")
+    if s.count("/") > 256:
+        raise ValueError("File name must not contain " "more than 256 slashes")
     return s
 
 
@@ -138,31 +135,43 @@ class AzureStorage(BaseStorage):
             "azure_container": setting("AZURE_CONTAINER"),
             "azure_ssl": setting("AZURE_SSL", True),
             "upload_max_conn": setting("AZURE_UPLOAD_MAX_CONN", 2),
-            "timeout": setting('AZURE_CONNECTION_TIMEOUT_SECS', 20),
-            "max_memory_size": setting('AZURE_BLOB_MAX_MEMORY_SIZE', 2*1024*1024),
-            "expiration_secs": setting('AZURE_URL_EXPIRATION_SECS'),
-            "overwrite_files": setting('AZURE_OVERWRITE_FILES', False),
-            "location": setting('AZURE_LOCATION', ''),
-            "default_content_type": 'application/octet-stream',
+            "timeout": setting("AZURE_CONNECTION_TIMEOUT_SECS", 20),
+            "max_memory_size": setting("AZURE_BLOB_MAX_MEMORY_SIZE", 2 * 1024 * 1024),
+            "expiration_secs": setting("AZURE_URL_EXPIRATION_SECS"),
+            "overwrite_files": setting("AZURE_OVERWRITE_FILES", False),
+            "location": setting("AZURE_LOCATION", ""),
+            "default_content_type": "application/octet-stream",
             "cache_control": setting("AZURE_CACHE_CONTROL"),
-            "sas_token": setting('AZURE_SAS_TOKEN'),
-            "endpoint_suffix": setting('AZURE_ENDPOINT_SUFFIX', 'core.windows.net'),
-            "custom_domain": setting('AZURE_CUSTOM_DOMAIN'),
-            "connection_string": setting('AZURE_CONNECTION_STRING'),
-            "token_credential": setting('AZURE_TOKEN_CREDENTIAL'),
-            "api_version": setting('AZURE_API_VERSION', None),
-            "tenant_id": setting('AZURE_TENANT_ID'),
-            "client_id": setting('AZURE_CLIENT_ID'),
-            "client_secret": setting('AZURE_CLIENT_SECRET'),
+            "sas_token": setting("AZURE_SAS_TOKEN"),
+            "endpoint_suffix": setting("AZURE_ENDPOINT_SUFFIX", "core.windows.net"),
+            "custom_domain": setting("AZURE_CUSTOM_DOMAIN"),
+            "connection_string": setting("AZURE_CONNECTION_STRING"),
+            "token_credential": setting("AZURE_TOKEN_CREDENTIAL"),
+            "api_version": setting("AZURE_API_VERSION", None),
+            "tenant_id": setting("AZURE_TENANT_ID"),
+            "client_id": setting("AZURE_CLIENT_ID"),
+            "client_secret": setting("AZURE_CLIENT_SECRET"),
         }
 
     def _get_service_client(self, use_custom_domain):
+        # Create a logger for the 'azure.storage.blob' SDK
+        logger = logging.getLogger("azure.storage.blob")
+        logger.setLevel(logging.DEBUG)
+
+        # Configure a console output
+        handler = logging.StreamHandler(stream=sys.stdout)
+        logger.addHandler(handler)
+
         if self.connection_string is not None:
             return BlobServiceClient.from_connection_string(self.connection_string)
 
-        account_domain = self.custom_domain if self.custom_domain and use_custom_domain else "{}.blob.{}".format(
-            self.account_name,
-            self.endpoint_suffix,
+        account_domain = (
+            self.custom_domain
+            if self.custom_domain and use_custom_domain
+            else "{}.blob.{}".format(
+                self.account_name,
+                self.endpoint_suffix,
+            )
         )
         account_url = "{}://{}".format(self.azure_protocol, account_domain)
 
@@ -178,14 +187,17 @@ class AzureStorage(BaseStorage):
             credential = self.token_credential
         elif self.tenant_id:
             from azure.identity import ClientSecretCredential
+
             credential = ClientSecretCredential(
                 tenant_id=self.tenant_id,
                 client_id=self.client_id,
-                client_secret=self.client_secret
+                client_secret=self.client_secret,
             )
         options = {}
         if self.api_version:
             options["api_version"] = self.api_version
+        options["logging_enable"] = True
+
         logger.error(f"azure_container:  {self.azure_container}")
         logger.error(f"azure_account_name: {self.account_name}")
         logger.error(f"client_id: { self.client_id}")
@@ -203,7 +215,9 @@ class AzureStorage(BaseStorage):
     @property
     def custom_service_client(self):
         if self._custom_service_client is None:
-            self._custom_service_client = self._get_service_client(use_custom_domain=True)
+            self._custom_service_client = self._get_service_client(
+                use_custom_domain=True
+            )
         return self._custom_service_client
 
     @property
@@ -236,8 +250,10 @@ class AzureStorage(BaseStorage):
         ):
             now = datetime.utcnow()
             key_expiry_time = now + timedelta(days=7)
-            self._user_delegation_key = self.custom_service_client.get_user_delegation_key(
-                key_start_time=now, key_expiry_time=key_expiry_time
+            self._user_delegation_key = (
+                self.custom_service_client.get_user_delegation_key(
+                    key_start_time=now, key_expiry_time=key_expiry_time
+                )
             )
             self._user_delegation_key_expiry = key_expiry_time
 
@@ -246,9 +262,9 @@ class AzureStorage(BaseStorage):
     @property
     def azure_protocol(self):
         if self.azure_ssl:
-            return 'https'
+            return "https"
         else:
-            return 'http'
+            return "http"
 
     def _normalize_name(self, name):
         try:
@@ -258,9 +274,7 @@ class AzureStorage(BaseStorage):
 
     def _get_valid_path(self, name):
         # Must be idempotent
-        return _get_valid_path(
-            self._normalize_name(
-                clean_name(name)))
+        return _get_valid_path(self._normalize_name(clean_name(name)))
 
     def _open(self, name, mode="rb"):
         return AzureStorageFile(name, mode, self)
@@ -281,9 +295,7 @@ class AzureStorage(BaseStorage):
 
     def delete(self, name):
         try:
-            self.client.delete_blob(
-                self._get_valid_path(name),
-                timeout=self.timeout)
+            self.client.delete_blob(self._get_valid_path(name), timeout=self.timeout)
         except ResourceNotFoundError:
             pass
 
@@ -308,7 +320,8 @@ class AzureStorage(BaseStorage):
             content_settings=ContentSettings(**params),
             max_concurrency=self.upload_max_conn,
             timeout=self.timeout,
-            overwrite=self.overwrite_files)
+            overwrite=self.overwrite_files,
+        )
         return cleaned_name
 
     def _expire_at(self, expire):
@@ -334,7 +347,7 @@ class AzureStorage(BaseStorage):
                 user_delegation_key=user_delegation_key,
                 permission=BlobSasPermissions(read=True),
                 expiry=expiry,
-                **params
+                **params,
             )
             credential = sas_token
 
@@ -346,13 +359,12 @@ class AzureStorage(BaseStorage):
 
         guessed_type, content_encoding = mimetypes.guess_type(name)
         content_type = (
-            _content_type(content) or
-            guessed_type or
-            self.default_content_type)
+            _content_type(content) or guessed_type or self.default_content_type
+        )
 
-        params['cache_control'] = self.cache_control
-        params['content_type'] = content_type
-        params['content_encoding'] = content_encoding
+        params["cache_control"] = self.cache_control
+        params["content_type"] = content_type
+        params["content_encoding"] = content_encoding
 
         params.update(self.get_object_parameters(name))
         return params
@@ -373,7 +385,7 @@ class AzureStorage(BaseStorage):
         """
         blob_client = self.client.get_blob_client(self._get_valid_path(name))
         properties = blob_client.get_blob_properties(timeout=self.timeout)
-        if not setting('USE_TZ', False):
+        if not setting("USE_TZ", False):
             return timezone.make_naive(properties.last_modified)
 
         tz = timezone.get_current_timezone()
@@ -391,20 +403,21 @@ class AzureStorage(BaseStorage):
             return mtime
         return timezone.make_naive(mtime)
 
-    def list_all(self, path=''):
+    def list_all(self, path=""):
         """Return all files for a given path"""
         if path:
             path = self._get_valid_path(path)
-        if path and not path.endswith('/'):
-            path += '/'
+        if path and not path.endswith("/"):
+            path += "/"
         # XXX make generator, add start, end
         return [
             blob.name
             for blob in self.client.list_blobs(
-                name_starts_with=path,
-                timeout=self.timeout)]
+                name_starts_with=path, timeout=self.timeout
+            )
+        ]
 
-    def listdir(self, path=''):
+    def listdir(self, path=""):
         """
         Return directories and files for a given path.
         Leave the path empty to list the root.
@@ -413,15 +426,15 @@ class AzureStorage(BaseStorage):
         files = []
         dirs = set()
         for name in self.list_all(path):
-            n = name[len(path):]
-            if '/' in n:
-                dirs.add(n.split('/', 1)[0])
+            n = name[len(path) :]
+            if "/" in n:
+                dirs.add(n.split("/", 1)[0])
             else:
                 files.append(n)
         return list(dirs), files
 
     def get_name_max_len(self):
-        max_len = _AZURE_NAME_MAX_LEN - len(self._get_valid_path('foo')) - len('foo')
+        max_len = _AZURE_NAME_MAX_LEN - len(self._get_valid_path("foo")) - len("foo")
         if not self.overwrite_files:
-            max_len -= len('_1234567')
+            max_len -= len("_1234567")
         return max_len
